@@ -132,3 +132,32 @@ def plot_convolution_result(x, h, start_x, start_h, global_xlim, ymax, global_ti
     # Plot the final convolution result
     fig = plot_signal(n_y, y, "y(n) = x(n) * h(n)", global_xlim, ymax, global_ticks, color='C3')
     st.pyplot(fig)
+
+
+def plot_continuous_signal(t_values, signal_values, title, xlim=None, ylim=None, color='C0'):
+    """
+    Plot a continuous-time signal using line plot.
+    
+    Args:
+        t_values: Array of time indices
+        signal_values: Array of signal values
+        title: Title for the plot
+        xlim: Tuple of (xmin, xmax) for x-axis limits (optional)
+        ylim: Tuple of (ymin, ymax) for y-axis limits (optional)
+        color: Color specification for the plot (default: 'C0')
+    
+    Returns:
+        Matplotlib figure object
+    """
+    fig, ax = plt.subplots()
+    ax.plot(t_values, signal_values, color=color, linewidth=2)
+    
+    if xlim:
+        ax.set_xlim(xlim)
+    if ylim:
+        ax.set_ylim(ylim)
+        
+    ax.grid(True, linestyle='--', alpha=0.7)
+    ax.set_xlabel("t")
+    ax.set_title(title)
+    return fig
