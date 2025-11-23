@@ -161,3 +161,5 @@ def get_signal_function(name):
     elif name == "dirac" or name == "dirac delta":
         return dirac
     return None
+
+print("Loaded signallab.signals")
