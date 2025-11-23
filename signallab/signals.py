@@ -138,3 +138,26 @@ def dirac(t, tolerance=1e-5):
     mask = np.isclose(t, 0, atol=1e-10)
     y[mask] = 1.0 # Unit impulse representation
     return y
+
+def get_signal_function(name):
+    """
+    Retrieve a signal function by its name.
+    
+    Args:
+        name: Name of the signal function (case-insensitive).
+        
+    Returns:
+        The corresponding function or None if not found.
+    """
+    name = name.lower()
+    if name == "rectpuls" or name == "rectangular pulse":
+        return rectpuls
+    elif name == "tripuls" or name == "triangular pulse":
+        return tripuls
+    elif name == "sinc" or name == "sinc function":
+        return sinc
+    elif name == "heaviside" or name == "heaviside step":
+        return heaviside
+    elif name == "dirac" or name == "dirac delta":
+        return dirac
+    return None
