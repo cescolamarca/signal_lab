@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional, List
 import numpy as np
-import signallab.signals as sig_mod
+from signallab.signals import get_signal_function
 
 @dataclass
 class SignalComponent:
@@ -18,7 +18,7 @@ class SignalComponent:
         """
         Evaluate this signal component over time t.
         """
-        func = sig_mod.get_signal_function(self.type_name)
+        func = get_signal_function(self.type_name)
         if func is None:
             return np.zeros_like(t)
         
