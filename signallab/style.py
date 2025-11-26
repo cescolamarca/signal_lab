@@ -34,7 +34,7 @@ def set_custom_style(dark_mode=True):
             'lines.linewidth': 2,
             'lines.color': accent_color,
             'font.family': 'sans-serif',
-            'font.sans-serif': ['Inter', 'Arial', 'sans-serif'],
+            'font.sans-serif': ['Segoe UI', 'Arial', 'DejaVu Sans'],
         })
     else:
         # Light mode (clean, minimal)
