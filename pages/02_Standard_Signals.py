@@ -1,130 +1,85 @@
 import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
-from signallab.signals import rectpuls, tripuls, sinc, heaviside, dirac
-from signallab.plotting import plot_continuous_signal
+from signallab.style import set_custom_style, get_plot_colors
+from signallab.signals import get_signal_function
+from signallab.utils import format_number
 
-# ============================================================================
-# PAGE CONFIGURATION
-# ============================================================================
-st.set_page_config(
-    page_title="SignalLab - Standard Signals",
-    page_icon="📈",
-    layout="wide"
-)
+st.markdown("# Standard Signals")
+st.markdown("Explore standard signal waveforms and their properties.")
 
-st.title("Standard Signal Generation")
-st.markdown("""
-This module allows you to generate and visualize standard signals:
-- **Rectangular Pulse**: `rectpuls(t)`
-- **Triangular Pulse**: `tripuls(t)`
-- **Sinc Function**: `sinc(t)`
-- **Heaviside Step**: `heaviside(t)`
-- **Dirac Delta**: `dirac(t)`
-
-You can adjust parameters to shift and scale these signals.
-""")
-
-# ============================================================================
-# SIDEBAR CONTROLS
-# ============================================================================
-st.sidebar.header("Signal Parameters")
-
-signal_type = st.sidebar.selectbox(
+# Signal Selection
+signal_type = st.selectbox(
     "Select Signal Type",
     ["Rectangular Pulse", "Triangular Pulse", "Sinc Function", "Heaviside Step", "Dirac Delta"]
 )
 
-# Common parameters
-t_min = st.sidebar.number_input("Time Start (t_min)", value=-5.0, step=0.5)
-t_max = st.sidebar.number_input("Time End (t_max)", value=5.0, step=0.5)
-num_points = st.sidebar.number_input("Number of Points", value=1000, step=100)
-
-t = np.linspace(t_min, t_max, int(num_points))
-
-# Signal specific parameters
-st.sidebar.markdown("---")
-st.sidebar.subheader(f"{signal_type} Parameters")
-
-y = None
-title = ""
-code_str = ""
-
-if signal_type == "Rectangular Pulse":
-    width = st.sidebar.number_input("Width (w)", value=1.0, step=0.1)
-    shift = st.sidebar.number_input("Shift (center)", value=0.0, step=0.1)
-    
-    # Apply shift: t -> t - shift
-    y = rectpuls(t - shift, w=width)
-    title = f"Rectangular Pulse (w={width}, shift={shift})"
-    code_str = f"y = rectpuls(t - {shift}, w={width})"
-
-elif signal_type == "Triangular Pulse":
-    width = st.sidebar.number_input("Width (w)", value=1.0, step=0.1)
-    skew = st.sidebar.slider("Skew (s)", min_value=-1.0, max_value=1.0, value=0.0, step=0.1)
-    shift = st.sidebar.number_input("Shift (center)", value=0.0, step=0.1)
-    
-    y = tripuls(t - shift, w=width, s=skew)
-    title = f"Triangular Pulse (w={width}, s={skew}, shift={shift})"
-    code_str = f"y = tripuls(t - {shift}, w={width}, s={skew})"
-
-elif signal_type == "Sinc Function":
-    scale = st.sidebar.number_input("Scale Factor (a in sinc(a*t))", value=1.0, step=0.1)
-    shift = st.sidebar.number_input("Shift (center)", value=0.0, step=0.1)
-    
-    # MATLAB sinc is sin(pi*t)/(pi*t). Scaling t scales the frequency.
-    # sinc(a*(t-shift))
-    y = sinc(scale * (t - shift))
-    title = f"Sinc Function (scale={scale}, shift={shift})"
-    code_str = f"y = sinc({scale} * (t - {shift}))"
-
-elif signal_type == "Heaviside Step":
-    shift = st.sidebar.number_input("Shift (center)", value=0.0, step=0.1)
-    
-    y = heaviside(t - shift)
-    title = f"Heaviside Step (shift={shift})"
-    code_str = f"y = heaviside(t - {shift})"
-
-elif signal_type == "Dirac Delta":
-    shift = st.sidebar.number_input("Shift (center)", value=0.0, step=0.1)
-    
-    y = dirac(t - shift)
-    title = f"Dirac Delta (shift={shift})"
-    code_str = f"y = dirac(t - {shift})"
-
-# ============================================================================
-# MAIN DISPLAY
-# ============================================================================
-
-col1, col2 = st.columns([3, 1])
-
+# Parameters
+col1, col2 = st.columns(2)
 with col1:
-    st.subheader("Visualization")
-    if y is not None:
-        # Determine appropriate y-limits
-        ymin, ymax = np.min(y), np.max(y)
-        margin = 0.1 * (ymax - ymin) if ymax != ymin else 0.5
-        ylim = (ymin - margin, ymax + margin)
-        
-        fig = plot_continuous_signal(t, y, title, xlim=(t_min, t_max), ylim=ylim)
-        st.pyplot(fig)
+    duration = st.slider("Time Span (s)", 1.0, 10.0, 4.0)
+    fs = st.slider("Sampling Rate (Hz)", 10, 200, 100)
+
+t = np.linspace(-duration/2, duration/2, int(duration * fs))
+
+# Signal Generation
+sig_func = get_signal_function(signal_type)
+params = {}
 
 with col2:
-    st.subheader("Details")
-    st.code(code_str, language="python")
-    st.markdown("### Values")
-    st.write(f"**Max Value:** {np.max(y):.4f}")
-    st.write(f"**Min Value:** {np.min(y):.4f}")
-    st.write(f"**Energy:** {np.sum(y**2) * (t[1]-t[0]):.4f}")
+    if signal_type in ["Rectangular Pulse", "Triangular Pulse"]:
+        width = st.slider("Width", 0.1, duration, 1.0)
+        params['w'] = width
+    if signal_type == "Triangular Pulse":
+        skew = st.slider("Skew", -1.0, 1.0, 0.0)
+        params['s'] = skew
 
-# ============================================================================
-# INSTRUCTIONS
-# ============================================================================
-st.markdown("---")
-st.markdown("""
-### How to use
-1. Select a signal type from the sidebar.
-2. Adjust the time range and resolution.
-3. Modify signal-specific parameters like width, skew, or shift.
-4. Observe the plot and the corresponding Python code.
-""")
+if sig_func:
+    y = sig_func(t, **params)
+    
+    # Plotting
+    colors = get_plot_colors()
+    fig, ax = plt.subplots(figsize=(10, 4))
+    
+    # Continuous-like representation
+    ax.plot(t, y, color=colors[1], label=signal_type, linewidth=2)
+    
+    # Stem plot for discrete view (optional or overlay)
+    show_samples = st.checkbox("Show Samples (Discrete View)", value=False)
+    if show_samples:
+        marker, stemlines, baseline = ax.stem(t, y, linefmt=colors[1], markerfmt='o', basefmt=" ")
+        plt.setp(stemlines, 'color', colors[1], 'linewidth', 1, 'alpha', 0.5)
+        plt.setp(marker, 'color', colors[1], 'markersize', 4)
+
+    ax.set_xlabel("Time (s)")
+    ax.set_ylabel("Amplitude")
+    ax.set_title(f"{signal_type} Analysis")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    st.pyplot(fig)
+    
+    # Sampling / Aliasing Demo Integration
+    st.markdown("### Sampling & Aliasing Demo")
+    st.info("Reduce the sampling rate to see aliasing effects (jagged lines or incorrect reconstruction).")
+    
+    # Resample
+    demo_fs = st.slider("Demo Sampling Rate (Hz)", 1, 50, 10, key="demo_fs")
+    t_sampled = np.linspace(-duration/2, duration/2, int(duration * demo_fs))
+    y_sampled = sig_func(t_sampled, **params)
+    
+    fig2, ax2 = plt.subplots(figsize=(10, 4))
+    # Ghost of original
+    ax2.plot(t, y, color='gray', alpha=0.3, label="Original (High Fs)", linestyle='--')
+    # Sampled
+    marker, stemlines, baseline = ax2.stem(t_sampled, y_sampled, linefmt=colors[2], markerfmt='o', basefmt=" ", label=f"Sampled @ {demo_fs}Hz")
+    plt.setp(marker, color=colors[2])
+    plt.setp(stemlines, color=colors[2])
+    
+    ax2.set_xlabel("Time (s)")
+    ax2.set_title("Sampling Visualization")
+    ax2.legend()
+    st.pyplot(fig2)
+
+else:
+    st.error("Signal function not found.")

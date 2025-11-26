@@ -1,103 +1,45 @@
 import streamlit as st
 import numpy as np
-from signallab.composer import SignalComponent, generate_composite_signal
-from signallab.plotting import plot_continuous_signal
+import matplotlib.pyplot as plt
+from signallab.style import set_custom_style, get_plot_colors
+from signallab.utils import parse_expression, format_number
 
-st.set_page_config(page_title="Signal Composer", page_icon="🎼", layout="wide")
+st.markdown("# Signal Composer")
+st.markdown("Generate signals using mathematical expressions and analyze them.")
 
-st.title("Signal Composer 🎼")
-st.markdown("Compose a complex signal by summing multiple standard signals.")
+# Sidebar controls
+st.sidebar.header("Signal Configuration")
+duration = st.sidebar.slider("Duration (s)", 0.1, 10.0, 1.0)
+fs = st.sidebar.slider("Sampling Rate (Hz)", 10, 1000, 100)
 
-# Initialize session state for components
-if "components" not in st.session_state:
-    st.session_state.components = []
+t = np.linspace(0, duration, int(duration * fs))
 
-# Sidebar for adding components
-st.sidebar.header("Add Component")
-with st.sidebar.form("add_component_form"):
-    sig_type = st.selectbox(
-        "Signal Type",
-        ["Rectangular Pulse", "Triangular Pulse", "Sinc Function", "Heaviside Step", "Dirac Delta"]
-    )
-    amp = st.number_input("Amplitude", value=1.0, step=0.1)
-    shift = st.number_input("Shift", value=0.0, step=0.5)
+# Expression Input
+st.subheader("Signal Definition")
+default_expr = "sin(2*pi*5*t) + 0.5*sin(2*pi*12*t)"
+expression = st.text_input("Enter Expression (use 't' as time variable)", value=default_expr)
+
+try:
+    y = parse_expression(expression, t)
     
-    scale = 1.0
-    skew = 0.0
+    # Plotting
+    colors = get_plot_colors()
+    fig, ax = plt.subplots(figsize=(10, 4))
+    ax.plot(t, y, color=colors[0], label="Signal y(t)")
+    ax.set_xlabel("Time (s)")
+    ax.set_ylabel("Amplitude")
+    ax.set_title(f"Signal: {expression}")
+    ax.legend()
     
-    if sig_type == "Rectangular Pulse":
-        scale = st.number_input("Width", value=1.0, min_value=0.1, step=0.1)
-    elif sig_type == "Triangular Pulse":
-        scale = st.number_input("Width", value=1.0, min_value=0.1, step=0.1)
-        skew = st.slider("Skew", -1.0, 1.0, 0.0, 0.1)
-    elif sig_type == "Sinc Function":
-        scale = st.number_input("Scale Factor", value=1.0, step=0.1)
+    st.pyplot(fig)
     
-    submitted = st.form_submit_button("Add Signal")
-    if submitted:
-        new_comp = SignalComponent(
-            type_name=sig_type,
-            amplitude=amp,
-            shift=shift,
-            scale=scale,
-            skew=skew
-        )
-        st.session_state.components.append(new_comp)
-        st.success(f"Added {sig_type}")
-
-# Main Area
-col1, col2 = st.columns([3, 1])
-
-with col1:
-    st.subheader("Composite Signal Plot")
+    # Stats
+    st.markdown("### Signal Statistics")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Mean", format_number(np.mean(y)))
+    col2.metric("Max", format_number(np.max(y)))
+    col3.metric("Min", format_number(np.min(y)))
     
-    # Plot controls
-    t_min = st.number_input("t_min", value=-5.0, step=1.0)
-    t_max = st.number_input("t_max", value=5.0, step=1.0)
-    resolution = st.slider("Resolution", 100, 2000, 1000)
-    
-    t = np.linspace(t_min, t_max, resolution)
-    
-    if st.session_state.components:
-        y_total = generate_composite_signal(st.session_state.components, t)
-        
-        # Determine ylim
-        ymin, ymax = np.min(y_total), np.max(y_total)
-        margin = 0.1 * (ymax - ymin) if ymax != ymin else 0.5
-        ylim = (ymin - margin, ymax + margin)
-        
-        fig = plot_continuous_signal(t, y_total, "Composite Signal", xlim=(t_min, t_max), ylim=ylim)
-        st.pyplot(fig)
-        
-        # Equation
-        st.subheader("Mathematical Expression")
-        latex_parts = [c.to_latex() for c in st.session_state.components]
-        latex_eq = " + ".join(latex_parts).replace("+ -", "- ")
-        st.latex(f"y(t) = {latex_eq}")
-    else:
-        st.info("Add signals from the sidebar to see the plot.")
-
-with col2:
-    st.subheader("Components")
-    if st.session_state.components:
-        for i, comp in enumerate(st.session_state.components):
-            with st.expander(f"{i+1}. {comp.type_name}", expanded=True):
-                st.write(f"**Amp:** {comp.amplitude}")
-                st.write(f"**Shift:** {comp.shift}")
-                if comp.type_name in ["Rectangular Pulse", "Triangular Pulse"]:
-                    st.write(f"**Width:** {comp.scale}")
-                if comp.type_name == "Triangular Pulse":
-                    st.write(f"**Skew:** {comp.skew}")
-                if comp.type_name == "Sinc Function":
-                    st.write(f"**Scale:** {comp.scale}")
-                
-                if st.button("Remove", key=f"remove_{i}"):
-                    st.session_state.components.pop(i)
-                    st.rerun()
-    else:
-        st.write("No components added.")
-
-    if st.session_state.components:
-        if st.button("Clear All"):
-            st.session_state.components = []
-            st.rerun()
+except Exception as e:
+    st.error(f"Error parsing expression: {e}")
+    st.info("Supported functions: sin, cos, tan, exp, sqrt, abs. Constant: pi.")
