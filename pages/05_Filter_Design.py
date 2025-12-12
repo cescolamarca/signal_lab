@@ -2,167 +2,324 @@ import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import signal
-from signallab.style import set_custom_style
+from signallab.style import set_custom_style, get_plot_colors
+from signallab.utils import format_number
 
 # Apply custom style
 set_custom_style(dark_mode=True)
 
-st.title("Digital Filter Design 🛠️")
-st.markdown("Design and analyze Infinite Impulse Response (IIR) and Finite Impulse Response (FIR) filters.")
+st.markdown("# 🎚️ Filter Design")
+st.markdown("Design and analyze digital filters (IIR/FIR) with live signal demonstration.")
 
-# --- Sidebar Controls ---
-st.sidebar.header("Filter Specifications")
+# Expandable Theory Section
+with st.expander("📚 Understanding Digital Filters"):
+    st.markdown("""
+    ### What are Digital Filters?
+    
+    Digital filters modify the frequency content of signals. They can:
+    - **Remove noise** (lowpass to remove high-freq hiss)
+    - **Isolate frequencies** (bandpass to extract specific tones)
+    - **Remove interference** (notch/bandstop to eliminate power line hum)
+    
+    ### Filter Types
+    
+    | Type | Passes | Blocks | Common Use |
+    |------|--------|--------|------------|
+    | **Lowpass** | Low frequencies | High frequencies | Anti-aliasing, noise removal |
+    | **Highpass** | High frequencies | Low frequencies | Removing DC offset, rumble |
+    | **Bandpass** | A frequency band | Everything else | Isolating a signal of interest |
+    | **Bandstop** | Everything except a band | A specific band | Removing 50/60 Hz hum |
+    
+    ### IIR vs FIR Filters
+    
+    **IIR (Infinite Impulse Response):**
+    - Uses feedback → lower order needed
+    - Non-linear phase → can cause distortion
+    - Examples: Butterworth, Chebyshev, Elliptic
+    
+    **FIR (Finite Impulse Response):**
+    - No feedback → always stable
+    - Can have linear phase → no distortion
+    - Higher order needed for sharp cutoff
+    
+    ### Filter Order
+    
+    Higher order = sharper transition between passband and stopband, but:
+    - More computation
+    - More delay (latency)
+    - Potential ringing artifacts
+    """)
 
-filter_type = st.sidebar.selectbox("Filter Response Type", ["Lowpass", "Highpass", "Bandpass", "Bandstop"])
-design_method = st.sidebar.selectbox("Design Method", ["IIR - Butterworth", "IIR - Chebyshev Type I", "IIR - Chebyshev Type II", "IIR - Elliptic", "FIR - Window Method"])
+# Sidebar Configuration
+st.sidebar.header("🔧 Filter Specifications")
 
-order = st.sidebar.slider("Filter Order", 1, 20, 4)
-fs = st.sidebar.number_input("Sampling Frequency (Hz)", 100.0, 100000.0, 1000.0, 100.0)
-nyquist = 0.5 * fs
+# Filter Class (IIR vs FIR)
+filter_class = st.sidebar.radio("Filter Class", ["IIR", "FIR"])
 
-# Cutoff Frequencies
-if filter_type in ["Bandpass", "Bandstop"]:
-    col1, col2 = st.sidebar.columns(2)
-    with col1:
-        fc1 = st.number_input("Cutoff 1 (Hz)", 0.0, nyquist, nyquist * 0.2)
-    with col2:
-        fc2 = st.number_input("Cutoff 2 (Hz)", 0.0, nyquist, nyquist * 0.4)
-    cutoff = [fc1, fc2]
-    # Validation
-    if fc1 >= fc2:
-        st.error("Cutoff 1 must be less than Cutoff 2")
-        st.stop()
+if filter_class == "IIR":
+    design_method = st.sidebar.selectbox(
+        "Design Method", 
+        ["Butterworth", "Chebyshev Type I", "Chebyshev Type II", "Elliptic", "Bessel"]
+    )
 else:
-    fc = st.sidebar.number_input("Cutoff Frequency (Hz)", 0.0, nyquist, nyquist * 0.25)
-    cutoff = fc
+    design_method = st.sidebar.selectbox(
+        "Window Type",
+        ["Hamming", "Hanning", "Blackman", "Kaiser"]
+    )
 
-# Additional Parameters for specific filters
-rp = 0
-rs = 0
-if "Chebyshev Type I" in design_method or "Elliptic" in design_method:
-    rp = st.sidebar.number_input("Passband Ripple (dB)", 0.1, 10.0, 1.0)
-if "Chebyshev Type II" in design_method or "Elliptic" in design_method:
-    rs = st.sidebar.number_input("Stopband Attenuation (dB)", 10.0, 100.0, 40.0)
+filter_type = st.sidebar.selectbox("Filter Type", ["Lowpass", "Highpass", "Bandpass", "Bandstop"])
 
-# Window selection for FIR
-window_name = "hamming"
-if "FIR" in design_method:
-    window_name = st.sidebar.selectbox("Window Function", ["rectangular", "hamming", "hanning", "blackman"])
+fs = st.sidebar.number_input("Sampling Frequency (Hz)", value=1000.0, min_value=100.0)
+nyquist = fs / 2.0
 
-# --- Filter Design ---
-b, a = None, None
+# Filter Order
+if filter_class == "IIR":
+    order = st.sidebar.slider("Filter Order", 1, 20, 4)
+else:
+    order = st.sidebar.slider("Number of Taps", 11, 201, 51, step=10)
 
+# Dynamic Cutoff Inputs
+st.sidebar.subheader("Cutoff Frequencies")
+if filter_type in ["Lowpass", "Highpass"]:
+    fc = st.sidebar.slider("Cutoff Frequency (Hz)", 10.0, nyquist - 10.0, nyquist / 4.0, step=5.0)
+    wn = fc / nyquist
+elif filter_type in ["Bandpass", "Bandstop"]:
+    fc_range = st.sidebar.slider("Cutoff Frequencies (Hz)", 10.0, nyquist - 10.0, (nyquist/4.0, nyquist/2.0), step=5.0)
+    wn = [f / nyquist for f in fc_range]
+
+# Additional parameters for specific IIR filters
+rp = None
+rs = None
+if filter_class == "IIR":
+    if design_method == "Chebyshev Type I" or design_method == "Elliptic":
+        rp = st.sidebar.slider("Passband Ripple (dB)", 0.1, 10.0, 1.0)
+    if design_method == "Chebyshev Type II" or design_method == "Elliptic":
+        rs = st.sidebar.slider("Stopband Attenuation (dB)", 10.0, 100.0, 40.0)
+    if design_method == "Bessel" and filter_type in ["Bandpass", "Bandstop"]:
+        st.sidebar.warning("Bessel filter may not work well with bandpass/bandstop.")
+
+# FIR Kaiser beta
+if filter_class == "FIR" and design_method == "Kaiser":
+    kaiser_beta = st.sidebar.slider("Kaiser Beta", 0.0, 14.0, 5.0, step=0.5)
+
+# Design Filter
 try:
-    if "Butterworth" in design_method:
-        b, a = signal.butter(order, cutoff, btype=filter_type.lower(), fs=fs)
-    elif "Chebyshev Type I" in design_method:
-        b, a = signal.cheby1(order, rp, cutoff, btype=filter_type.lower(), fs=fs)
-    elif "Chebyshev Type II" in design_method:
-        b, a = signal.cheby2(order, rs, cutoff, btype=filter_type.lower(), fs=fs)
-    elif "Elliptic" in design_method:
-        b, a = signal.ellip(order, rp, rs, cutoff, btype=filter_type.lower(), fs=fs)
-    elif "FIR" in design_method:
-        # FIR Design using firwin
-        # firwin requires cutoff to be normalized if fs is not provided, but we can pass fs
-        # numtaps must be odd for highpass/bandstop with antisymmetric linear phase, but firwin handles some cases.
-        # Let's use order + 1 taps
-        numtaps = order + 1
+    if filter_class == "IIR":
+        if design_method == "Butterworth":
+            b, a = signal.butter(order, wn, btype=filter_type.lower())
+        elif design_method == "Chebyshev Type I":
+            b, a = signal.cheby1(order, rp, wn, btype=filter_type.lower())
+        elif design_method == "Chebyshev Type II":
+            b, a = signal.cheby2(order, rs, wn, btype=filter_type.lower())
+        elif design_method == "Elliptic":
+            b, a = signal.ellip(order, rp, rs, wn, btype=filter_type.lower())
+        elif design_method == "Bessel":
+            b, a = signal.bessel(order, wn, btype=filter_type.lower())
+    else:  # FIR
+        window_map = {
+            "Hamming": "hamming",
+            "Hanning": "hann", 
+            "Blackman": "blackman",
+            "Kaiser": ("kaiser", kaiser_beta) if design_method == "Kaiser" else "kaiser"
+        }
+        window = window_map.get(design_method, "hamming")
         
-        # Adjust pass_zero for Bandpass/Bandstop
-        pass_zero = True
-        if filter_type == "Lowpass": pass_zero = True
-        elif filter_type == "Highpass": pass_zero = False
-        elif filter_type == "Bandpass": pass_zero = False
-        elif filter_type == "Bandstop": pass_zero = True
-
-        # firwin uses 'boxcar' for rectangular
-        win = 'boxcar' if window_name == 'rectangular' else window_name
-        
-        b = signal.firwin(numtaps, cutoff, window=win, fs=fs, pass_zero=pass_zero)
+        if filter_type in ["Lowpass", "Highpass"]:
+            b = signal.firwin(order, fc, fs=fs, window=window, pass_zero=(filter_type == "Lowpass"))
+        else:
+            b = signal.firwin(order, [fc_range[0], fc_range[1]], fs=fs, window=window, 
+                             pass_zero=(filter_type == "Bandstop"))
         a = [1.0]
+    
+    # Frequency Response
+    w, h = signal.freqz(b, a, worN=2000, fs=fs)
+    
+    colors = get_plot_colors()
+    
+    # === Section 1: Frequency Response ===
+    st.subheader("📈 Frequency Response")
+    
+    fig_freq, (ax_mag, ax_phase) = plt.subplots(2, 1, figsize=(10, 7), sharex=True)
+    
+    # Magnitude
+    mag_db = 20 * np.log10(np.abs(h) + 1e-10)
+    ax_mag.plot(w, mag_db, color=colors[0], linewidth=2)
+    ax_mag.set_title(f"{filter_class} {design_method} {filter_type} Filter - Order {order}")
+    ax_mag.set_ylabel("Magnitude (dB)")
+    ax_mag.set_ylim(-80, 5)
+    ax_mag.grid(True, alpha=0.3)
+    
+    # Mark cutoff frequencies
+    ax_mag.axhline(-3, color='gray', linestyle='--', alpha=0.5, label='-3dB cutoff')
+    if filter_type in ["Lowpass", "Highpass"]:
+        ax_mag.axvline(fc, color=colors[1], linestyle='--', alpha=0.7, label=f'fc = {fc:.0f} Hz')
+    else:
+        ax_mag.axvline(fc_range[0], color=colors[1], linestyle='--', alpha=0.7, label=f'fc1 = {fc_range[0]:.0f} Hz')
+        ax_mag.axvline(fc_range[1], color=colors[1], linestyle=':', alpha=0.7, label=f'fc2 = {fc_range[1]:.0f} Hz')
+    ax_mag.legend(loc='upper right')
+
+    # Phase
+    angles = np.unwrap(np.angle(h))
+    ax_phase.plot(w, np.degrees(angles), color=colors[2], linewidth=1)
+    ax_phase.set_xlabel("Frequency (Hz)")
+    ax_phase.set_ylabel("Phase (degrees)")
+    ax_phase.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    st.pyplot(fig_freq)
+    
+    # === Section 2: Pole-Zero Plot ===
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("🎯 Pole-Zero Plot")
+        z, p, k = signal.tf2zpk(b, a)
+        
+        fig_pz, ax_pz = plt.subplots(figsize=(5, 5))
+        
+        # Unit circle
+        theta = np.linspace(0, 2*np.pi, 100)
+        ax_pz.plot(np.cos(theta), np.sin(theta), 'w--', alpha=0.3, linewidth=1)
+        
+        # Zeros and Poles
+        ax_pz.scatter(np.real(z), np.imag(z), marker='o', s=80, facecolors='none', 
+                     edgecolors=colors[2], linewidths=2, label=f'Zeros ({len(z)})')
+        ax_pz.scatter(np.real(p), np.imag(p), marker='x', s=80, 
+                     color=colors[1], linewidths=2, label=f'Poles ({len(p)})')
+        
+        ax_pz.set_xlim(-1.5, 1.5)
+        ax_pz.set_ylim(-1.5, 1.5)
+        ax_pz.set_aspect('equal')
+        ax_pz.set_xlabel("Real")
+        ax_pz.set_ylabel("Imaginary")
+        ax_pz.legend(loc='upper right')
+        ax_pz.grid(True, alpha=0.3)
+        ax_pz.axhline(0, color='gray', linewidth=0.5)
+        ax_pz.axvline(0, color='gray', linewidth=0.5)
+        
+        st.pyplot(fig_pz)
+        
+        # Stability check
+        pole_magnitudes = np.abs(p)
+        if len(pole_magnitudes) > 0 and np.all(pole_magnitudes < 1):
+            st.success("✅ Filter is **stable** (all poles inside unit circle)")
+        elif len(pole_magnitudes) > 0:
+            st.error("⚠️ Filter is **unstable** (poles outside unit circle)")
+    
+    with col2:
+        st.subheader("📉 Impulse Response")
+        try:
+            imp_length = min(200, int(fs / 2))
+            t_imp, y_imp = signal.dimpulse((b, a, 1/fs), n=imp_length)
+            y_imp = y_imp[0].flatten()
+            
+            fig_imp, ax_imp = plt.subplots(figsize=(5, 5))
+            ax_imp.stem(t_imp[:len(y_imp)], y_imp, linefmt=colors[3], markerfmt='o', basefmt=" ")
+            ax_imp.set_xlabel("Time (s)")
+            ax_imp.set_ylabel("Amplitude")
+            ax_imp.grid(True, alpha=0.3)
+            st.pyplot(fig_imp)
+        except Exception:
+            st.warning("Could not compute impulse response for this configuration.")
+    
+    # === Section 3: Live Signal Demo ===
+    st.markdown("---")
+    st.subheader("🔬 Live Filter Demo")
+    st.markdown("See how the filter affects a real signal with noise!")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        demo_signal_type = st.selectbox("Demo Signal", [
+            "Sine with High-Freq Noise",
+            "Sine with Low-Freq Drift", 
+            "Two Tones + Noise",
+            "Chirp Signal"
+        ])
+    
+    with col2:
+        demo_noise_level = st.slider("Noise Level", 0.0, 1.0, 0.3, step=0.05)
+    
+    # Generate demo signal
+    demo_duration = 0.5
+    demo_t = np.linspace(0, demo_duration, int(demo_duration * fs), endpoint=False)
+    
+    if demo_signal_type == "Sine with High-Freq Noise":
+        demo_clean = np.sin(2 * np.pi * 50 * demo_t)  # 50 Hz tone
+        demo_noise = demo_noise_level * np.sin(2 * np.pi * 400 * demo_t)  # 400 Hz noise
+        expected_filter = "Lowpass < 200 Hz"
+    elif demo_signal_type == "Sine with Low-Freq Drift":
+        demo_clean = np.sin(2 * np.pi * 200 * demo_t)  # 200 Hz tone
+        demo_noise = demo_noise_level * np.sin(2 * np.pi * 10 * demo_t)  # 10 Hz drift
+        expected_filter = "Highpass > 50 Hz"
+    elif demo_signal_type == "Two Tones + Noise":
+        demo_clean = np.sin(2 * np.pi * 100 * demo_t) + 0.5 * np.sin(2 * np.pi * 150 * demo_t)
+        demo_noise = demo_noise_level * np.random.randn(len(demo_t))
+        expected_filter = "Bandpass 50-200 Hz"
+    else:  # Chirp
+        demo_clean = signal.chirp(demo_t, 50, demo_duration, 300)
+        demo_noise = demo_noise_level * np.random.randn(len(demo_t))
+        expected_filter = "Lowpass to smooth"
+    
+    demo_signal = demo_clean + demo_noise
+    
+    # Apply filter
+    demo_filtered = signal.filtfilt(b, a, demo_signal)
+    
+    # Plot comparison
+    fig_demo, axes = plt.subplots(2, 2, figsize=(12, 6))
+    
+    # Time domain - Original
+    axes[0, 0].plot(demo_t * 1000, demo_signal, color=colors[0], linewidth=0.8, alpha=0.8)
+    axes[0, 0].plot(demo_t * 1000, demo_clean, color='white', linewidth=1, alpha=0.3, linestyle='--', label='Clean')
+    axes[0, 0].set_title("Original (Noisy)")
+    axes[0, 0].set_xlabel("Time (ms)")
+    axes[0, 0].set_ylabel("Amplitude")
+    axes[0, 0].legend(loc='upper right')
+    axes[0, 0].grid(True, alpha=0.3)
+    
+    # Time domain - Filtered
+    axes[0, 1].plot(demo_t * 1000, demo_filtered, color=colors[3], linewidth=0.8)
+    axes[0, 1].plot(demo_t * 1000, demo_clean, color='white', linewidth=1, alpha=0.3, linestyle='--', label='Clean')
+    axes[0, 1].set_title("Filtered")
+    axes[0, 1].set_xlabel("Time (ms)")
+    axes[0, 1].set_ylabel("Amplitude")
+    axes[0, 1].legend(loc='upper right')
+    axes[0, 1].grid(True, alpha=0.3)
+    
+    # Spectrum - Original
+    f_orig, Pxx_orig = signal.welch(demo_signal, fs, nperseg=256)
+    axes[1, 0].semilogy(f_orig, Pxx_orig, color=colors[0])
+    axes[1, 0].set_title("Original Spectrum")
+    axes[1, 0].set_xlabel("Frequency (Hz)")
+    axes[1, 0].set_ylabel("Power")
+    axes[1, 0].grid(True, alpha=0.3)
+    
+    # Spectrum - Filtered
+    f_filt, Pxx_filt = signal.welch(demo_filtered, fs, nperseg=256)
+    axes[1, 1].semilogy(f_filt, Pxx_filt, color=colors[3])
+    axes[1, 1].set_title("Filtered Spectrum")
+    axes[1, 1].set_xlabel("Frequency (Hz)")
+    axes[1, 1].set_ylabel("Power")
+    axes[1, 1].grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    st.pyplot(fig_demo)
+    
+    # Metrics
+    col1, col2, col3 = st.columns(3)
+    
+    mse_before = np.mean((demo_signal - demo_clean) ** 2)
+    mse_after = np.mean((demo_filtered - demo_clean) ** 2)
+    improvement = (1 - mse_after / mse_before) * 100 if mse_before > 0 else 0
+    
+    col1.metric("MSE (Before)", f"{mse_before:.4f}")
+    col2.metric("MSE (After)", f"{mse_after:.4f}")
+    col3.metric("Noise Reduction", f"{improvement:.1f}%", delta=f"{improvement:.1f}%")
+    
+    if improvement < 20:
+        st.info(f"💡 **Tip:** For this signal, try a **{expected_filter}** filter for better results!")
 
 except Exception as e:
     st.error(f"Error designing filter: {e}")
-    st.stop()
-
-# --- Visualization ---
-
-# 1. Frequency Response
-st.subheader("1. Frequency Response")
-w, h_freq = signal.freqz(b, a, fs=fs)
-
-fig_freq, (ax_mag, ax_phase) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
-
-# Magnitude
-ax_mag.plot(w, 20 * np.log10(abs(h_freq)), 'C0')
-ax_mag.set_title("Magnitude Response (Bode Plot)")
-ax_mag.set_ylabel("Amplitude (dB)")
-ax_mag.grid(True, which='both', alpha=0.3)
-ax_mag.axvline(nyquist, color='r', linestyle='--', alpha=0.5, label='Nyquist')
-
-# Phase
-angles = np.unwrap(np.angle(h_freq))
-ax_phase.plot(w, angles, 'C1')
-ax_phase.set_title("Phase Response")
-ax_phase.set_xlabel("Frequency (Hz)")
-ax_phase.set_ylabel("Phase (radians)")
-ax_phase.grid(True, which='both', alpha=0.3)
-
-st.pyplot(fig_freq)
-
-col1, col2 = st.columns(2)
-
-# 2. Impulse Response
-with col1:
-    st.subheader("2. Impulse Response")
-    # Generate impulse
-    impulse = np.zeros(100)
-    impulse[0] = 1
-    if len(a) == 1: # FIR
-        h_imp = b
-        t_imp = np.arange(len(b)) / fs
-    else: # IIR
-        t_imp, h_imp = signal.dimpulse((b, a, 1/fs), n=100)
-        t_imp = np.array(t_imp).flatten()
-        h_imp = np.array(h_imp).flatten()
-
-    fig_imp, ax_imp = plt.subplots(figsize=(6, 4))
-    ax_imp.stem(t_imp, h_imp, basefmt=" ")
-    ax_imp.set_title("Impulse Response h[n]")
-    ax_imp.set_xlabel("Time (s)")
-    ax_imp.grid(True, alpha=0.3)
-    st.pyplot(fig_imp)
-
-# 3. Pole-Zero Plot
-with col2:
-    st.subheader("3. Pole-Zero Plot")
-    z, p, k = signal.tf2zpk(b, a)
-    
-    fig_pz, ax_pz = plt.subplots(figsize=(6, 4))
-    
-    # Unit circle
-    unit_circle = plt.Circle((0, 0), 1, color='k', fill=False, linestyle='--', alpha=0.5)
-    ax_pz.add_artist(unit_circle)
-    
-    # Poles and Zeros
-    ax_pz.scatter(np.real(z), np.imag(z), s=50, marker='o', facecolors='none', edgecolors='b', label='Zeros')
-    ax_pz.scatter(np.real(p), np.imag(p), s=50, marker='x', color='r', label='Poles')
-    
-    ax_pz.set_title("Pole-Zero Map")
-    ax_pz.set_xlabel("Real")
-    ax_pz.set_ylabel("Imaginary")
-    ax_pz.grid(True, alpha=0.3)
-    ax_pz.legend()
-    ax_pz.set_aspect('equal')
-    
-    # Adjust limits to ensure unit circle is visible
-    limit = max(1.5, np.max(np.abs(np.concatenate((z, p))))) if len(z) > 0 or len(p) > 0 else 1.5
-    ax_pz.set_xlim(-limit, limit)
-    ax_pz.set_ylim(-limit, limit)
-    
-    st.pyplot(fig_pz)
-
-# Show coefficients
-with st.expander("Filter Coefficients"):
-    st.write("Numerator (b):", b)
-    st.write("Denominator (a):", a)
+    st.info("Try adjusting the filter parameters. Some combinations may not be valid.")

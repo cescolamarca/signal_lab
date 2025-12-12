@@ -13,22 +13,52 @@ st.set_page_config(
 set_custom_style(dark_mode=True)
 
 st.title("SignalLab 📡")
-st.markdown("### The DSP Workbench")
+st.markdown("### Interactive DSP Workbench for Signal Analysis")
 
 st.markdown("""
 Welcome to **SignalLab**, an interactive environment for exploring Digital Signal Processing concepts.
+Built to support students in **Signal Analysis** courses with hands-on demonstrations.
 
-### Modules
+---
 
-- **[Signal Composer](/Signal_Composer)**: Create and analyze custom signals.
-- **[Standard Signals](/Standard_Signals)**: Explore fundamental waveforms.
-- **[Convolution Demo](/Convolution_Demo)**: Visual step-by-step convolution.
-- **[Frequency Domain](/Frequency_Domain)**: *Coming Soon* - FFT and Spectrograms.
-- **[Filter Design](/Filter_Design)**: *Coming Soon* - Interactive Filter Design.
+### 🎯 Featured Demo
+""")
+
+# Featured demo card with highlight
+st.info("""
+**🎵 Audio Noise Removal** — See digital filtering in action!
+
+- Generate noisy audio or upload your own WAV files
+- Design FIR/IIR filters and apply them in real-time
+- Compare before/after spectrograms with audio playback
+- Measure actual noise reduction (SNR improvement)
+
+👉 [Try Audio Processing](/Audio_Processing)
+""")
+
+st.markdown("""
+---
+
+### 📚 All Modules
+
+| Module | Description |
+|--------|-------------|
+| **[Signal Composer](/Signal_Composer)** | Create signals using mathematical expressions |
+| **[Standard Signals](/Standard_Signals)** | Explore fundamental waveforms with sampling demo |
+| **[Convolution Demo](/Convolution_Demo)** | Visual step-by-step discrete convolution |
+| **[Frequency Domain](/Frequency_Domain)** | FFT analysis with peak detection & spectrograms |
+| **[Filter Design](/Filter_Design)** | Interactive IIR/FIR filter design with live demo |
+| **[Audio Processing](/Audio_Processing)** | ⭐ Complete noise removal workflow |
 
 Select a module from the sidebar to begin.
 """)
 
-# Sidebar footer or info
+# Sidebar footer
 st.sidebar.markdown("---")
-st.sidebar.caption("SignalLab v2.0 | Designed for Signal Analysis")
+st.sidebar.markdown("### Quick Links")
+st.sidebar.page_link("pages/06_Audio_Processing.py", label="🎵 Audio Processing", icon="⭐")
+st.sidebar.page_link("pages/04_Frequency_Domain.py", label="📊 Frequency Domain")
+st.sidebar.page_link("pages/05_Filter_Design.py", label="🎚️ Filter Design")
+
+st.sidebar.markdown("---")
+st.sidebar.caption("SignalLab v2.1 | Designed for Signal Analysis Education")
