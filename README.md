@@ -1,14 +1,12 @@
-# SignalLab — Interactive DSP Workbench
+# DEMO: https://signallab.streamlit.app/
 
 SignalLab is a web-based DSP workbench built with Streamlit to help students build intuition for core signal analysis topics through interactive, visual demos.
 
 ## Features
 
 ### 1) Signal Composer
-Create custom signals by typing mathematical expressions, e.g.
+Create and see custom signals by typing mathematical expressions, e.g.
 - `sin(2*pi*5*t) + 0.5*cos(2*pi*10*t)`
-
-Expressions are evaluated safely (no `eval`) using an AST-based whitelist.
 
 ### 2) Standard Signals + Sampling/Aliasing
 Interact with common waveforms and parameters:
