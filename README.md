@@ -21,7 +21,7 @@ A guided visualization of discrete-time convolution as a **weighted sum of shift
 - Shows the corresponding shifted/scaled `h[n]`
 - Builds the output incrementally
 
-## Tech Stack
+## Libraries used
 - Streamlit
 - NumPy
 - Matplotlib
