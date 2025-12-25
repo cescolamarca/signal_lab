@@ -2,8 +2,6 @@
 
 SignalLab is a web-based DSP workbench built with Streamlit to help students build intuition for core signal analysis topics through interactive, visual demos.
 
-**Video demo:** <URL HERE>
-
 ## Features
 
 ### 1) Signal Composer
